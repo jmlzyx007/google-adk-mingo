@@ -1,0 +1,16 @@
+[project]
+name = "google-adk-mingo"
+version = "0.1.0"
+description = "Google ADK v2.0 training labs — from zero to hero"
+readme = "README.md"
+authors = [
+    { name = "jmlzyx007", email = "minglei.jiang@hotmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "google-adk>=2.7.0",
+    "python-dotenv>=1.2.3",
+]
+
+[tool.uv]
+package = false
