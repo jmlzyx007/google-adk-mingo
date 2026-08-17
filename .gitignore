@@ -11,3 +11,6 @@ wheels/
 
 # Secrets
 .env
+
+# ADK local runtime state (session history, per-agent)
+.adk/
