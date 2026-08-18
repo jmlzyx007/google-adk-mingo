@@ -17,7 +17,7 @@ Full details: [docs/setup.md](docs/setup.md) · [docs/execution-modes.md](docs/e
 7 parts, 40 modules. Each lab gets its own agent folder in this repo.
 
 - [x] **Part 1 — Foundations (modules 1–7): done** — `echo_agent/` (module 3), `support_analyzer/` (modules 4–6), `visual_catalog/` (module 7)
-- [ ] Part 2 — Tools & Capabilities (modules 8–14)
+- [x] **Part 2 — Tools & Capabilities (modules 8–14): done** — `researcher_agent/` (8), `calculator_agent/` (9), `memory_agent/` (10), `market_analyst/` (11), `research_assistant/` (12), `secure_finance/` (13), `persistent_agent/` (13.5), `fact_finder_agent/` (14)
 - [ ] Part 3 — Multi-Agent Systems (modules 15–21)
 - [ ] Part 4 — Production Readiness (modules 22–26)
 - [ ] Part 5 — Advanced Integrations, MCP & UI (modules 27–30)
@@ -28,7 +28,8 @@ Full details: [docs/setup.md](docs/setup.md) · [docs/execution-modes.md](docs/e
 
 - [Setup](docs/setup.md) — uv workflow, auth options, environment checks, model-name gotcha
 - [Execution modes](docs/execution-modes.md) — web UI vs CLI vs API server, agent discovery
-- [Module notes](docs/module-notes.md) — lessons per module (structured output, model switching, logging, multimodal)
+- [Module notes](docs/module-notes.md) — lessons per module (structured output, model switching, logging, multimodal, tools, persistence)
+- [LangChain ecosystem](docs/langchain-ecosystem.md) — what the module 14 adapter unlocks, package landscape, caveats
 
 ## Layout
 
@@ -36,6 +37,14 @@ Full details: [docs/setup.md](docs/setup.md) · [docs/execution-modes.md](docs/e
 echo_agent/          # module 3 — first agent (discovery convention)
 support_analyzer/    # modules 4-6 — structured output, model switching, programmatic runs
 visual_catalog/      # module 7 — multimodal (agent.py + standalone main.py)
+researcher_agent/    # module 8 — built-in google_search tool
+calculator_agent/    # module 9 — custom function tools
+memory_agent/        # module 10 — stateful tools (ToolContext.state)
+market_analyst/      # module 11 — OpenAPI toolset (Frankfurter API)
+research_assistant/  # module 12 — grounding + custom tools mixed
+secure_finance/      # module 13 — HITL confirmation, actions, Workflow graph
+persistent_agent/    # module 13.5 — custom Firestore session service (needs GCP)
+fact_finder_agent/   # module 14 — LangChain Wikipedia tool via adapter
 docs/                # split-out documentation
 verify_setup.py      # quick environment smoke test
 .env.example         # auth template (copy to .env — never committed)
