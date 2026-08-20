@@ -1,0 +1,35 @@
+# Module 33 - GKE Deployment: runs the agent api_server pods.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adk-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: adk-agent
+  template:
+    metadata:
+      labels:
+        app: adk-agent
+    spec:
+      containers:
+        - name: adk-agent
+          # Built with: gcloud builds submit --tag <this image>
+          image: us-central1-docker.pkg.dev/YOUR_PROJECT/adk-repo/adk-agent:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GOOGLE_GENAI_USE_VERTEXAI
+              value: "1"
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "YOUR_PROJECT"
+            - name: GOOGLE_CLOUD_LOCATION
+              value: "us-central1"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"

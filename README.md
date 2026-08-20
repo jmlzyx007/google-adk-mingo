@@ -21,13 +21,14 @@ Full details: [docs/setup.md](docs/setup.md) · [docs/execution-modes.md](docs/e
 - [x] **Part 3 — Multi-Agent Systems (modules 15–21): done** — `greeting_system/` (15), `news_aggregator/` (16), `market_router/` (17), `support_router_v2/` (18), `travel_team/` (19), `essay_refiner/` (20), `research_specialist/` + `a2a_orchestrator/` (21)
 - [x] **Part 4 — Production Readiness (modules 22–26): done** — `personal_tutor/` (22), `doc_processor/` (23), `calculator_agent/` evalset (24), `observability_agent/` (25), `safety_guard/` (25.5), `content_moderator/` (26)
 - [x] **Part 5 — Advanced Integrations, MCP & UI (modules 27–30): done** — `mcp_agent/` (27), `custom_mcp_server/` (28), `ui_agent/` (29), `streaming_agent/` + `custom_streaming_app/` (30)
-- [ ] Part 6 — Deployment & Enterprise (modules 31–36)
+- [x] **Part 6 — Deployment & Enterprise (modules 31–36): prepared** — `deployment/` artifacts + [operational guide](docs/deployment-guide.md); live deploys pending GCP setup
 - [ ] Part 7 — Capstone & Best Practices (modules 37–40)
 
 ## Docs
 
 - [Setup](docs/setup.md) — uv workflow, auth options, environment checks, model-name gotcha
 - [Execution modes](docs/execution-modes.md) — web UI vs CLI vs API server, agent discovery
+- [Deployment guide](docs/deployment-guide.md) — Part 6 operations: Cloud Run, GKE, Agent Runtime, Gemini Enterprise
 - [Module notes](docs/module-notes.md) — lessons per module (structured output, model switching, logging, multimodal, tools, persistence)
 - [LangChain ecosystem](docs/langchain-ecosystem.md) — what the module 14 adapter unlocks, package landscape, caveats
 
@@ -63,6 +64,7 @@ custom_mcp_server/   # module 28 — MCP provider (cart_server.py) + consuming a
 ui_agent/            # module 29 — custom SSE chat UI (index.html + api_server)
 streaming_agent/     # module 30 — live agent (bidi model) for the streaming client
 custom_streaming_app/# module 30 — WebSocket client (text + mic, /run_live)
+deployment/          # modules 31-36 — Cloud Run / GKE / MCP / Agent Runtime artifacts
 docs/                # split-out documentation
 verify_setup.py      # quick environment smoke test
 .env.example         # auth template (copy to .env — never committed)

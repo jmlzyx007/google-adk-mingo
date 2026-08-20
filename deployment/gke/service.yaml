@@ -1,0 +1,12 @@
+# Module 33 - GKE Service: load balancer exposing the pods externally.
+apiVersion: v1
+kind: Service
+metadata:
+  name: adk-agent-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: adk-agent
+  ports:
+    - port: 80
+      targetPort: 8080
