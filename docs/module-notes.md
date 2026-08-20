@@ -319,3 +319,136 @@ Three-question heuristic: path predictable? → static/structured edges. Needs P
 control flow? → dynamic `@node`. Needs separate environments? → distributed A2A.
 No one-size-fits-all — production systems are hybrids; prefer the simplest pattern that
 fits, and validate the design in the dev UI's graph view.
+
+## Module 22 — state scopes & memory (`personal_tutor/`)
+
+One state dict, four scopes decided purely by **key prefix**:
+
+| Prefix | Scope | Verified behavior |
+|---|---|---|
+| `user:` | all sessions of this user (per app) | visible in a brand-new session before any turn |
+| *(none)* | this session only | `current_topic` never appeared in session 2 |
+| `temp:` | this invocation only | written by the grade tool, absent from persisted state |
+| `app:` | every user of the app | global config, e.g. set via dev UI State tab |
+
+- Same `tool_context.state[...]` API for all scopes — the prefix does the routing
+  (base session service applies `user:`/`app:` deltas to the right stores and trims
+  `temp:` before persisting; we saw that code in module 13.5's `append_event`).
+- **Instruction injection**: `{user:language}` / `{app:course_version?}` placeholders in
+  the instruction interpolate from state; `?` makes a placeholder optional (no error when
+  unset) — use it for keys that may not exist yet.
+- Copy-on-read gotcha: mutate list/dict state via read → copy → reassign
+  (`topics = list(state.get(...)); ...; state[k] = topics`) so the write is a tracked delta.
+- `InMemorySessionService` keeps `user:`/`app:` across sessions but loses everything on
+  process restart — production needs a persistent SessionService (module 13.5) plus a
+  semantic memory service (`VertexAiMemoryBankService`) instead of the simulated
+  `search_past_lessons`.
+
+## Module 23 — artifacts (`doc_processor/`)
+
+State holds small key-value data; **artifacts hold files** — text or binary `types.Part`s
+stored by filename with automatic versioning. Third pluggable service on the Runner
+(sessions / memory / artifacts): `InMemoryArtifactService` for dev,
+`GcsArtifactService(bucket_name=...)` in production — tool code identical.
+
+```python
+version = await tool_context.save_artifact(name, part)   # returns version int (0, 1, ...)
+part    = await tool_context.load_artifact(name)          # latest, or version=n
+names   = await tool_context.list_artifacts()
+```
+
+- All artifact methods are **async** — tools that touch them must be `async def`.
+- `types.Part.from_text(text=...)` for text, `types.Part.from_bytes(data=..., mime_type=...)`
+  for binary; on load, check `part.text` vs `part.inline_data` (mime_type + data).
+- Every save creates a **new version** (audit trail for free); `load_artifact(version=n)`
+  reads history.
+- Lab: 4-stage pipeline (extract → summarize → chart → report) where each stage's output
+  is the next stage's input via artifacts, and the report compiles them via
+  `list_artifacts()`. Verified live: 4 artifacts stored, PNG kept its mime type, report
+  aggregated text + binary correctly.
+
+## Module 24 — evaluation (`calculator_agent/calculator_tests.evalset.json`)
+
+Agent testing formalized: an **evalset** (JSON) of cases — user prompt, expected final
+response, expected **tool trajectory** (calls + args) — replayed live by:
+
+```sh
+uv run adk eval calculator_agent calculator_agent/calculator_tests.evalset.json \
+    --config_file_path calculator_agent/test_config.json --print_detailed_results
+```
+
+- Two metrics (thresholds in `test_config.json`): `tool_trajectory_avg_score` — exact
+  match on tool calls/args, keep at **1.0** (the robust signal: verifies the reasoning
+  path, not lucky text); `response_match_score` — ROUGE text overlap vs the golden answer.
+- Needs `google-adk[eval]` extra — which pins `litellm<1.86` (conflicts with newer litellm;
+  we downgraded 1.97 → 1.85.7).
+- Results land in `<agent>/.adk/eval_history/*.evalset_result.json`; the dev UI Eval tab
+  can record cases from live sessions and re-run them.
+- Schema classes (`google.adk.evaluation.eval_set.EvalSet` etc.) can generate valid
+  evalset JSON programmatically.
+
+**Lessons from a real failure** (divide_by_zero case): trajectory scored 1.0 every run,
+but response_match was 0.32 then 0.71 across runs — (1) golden responses must be
+*recorded from a validated run*, not hand-authored; (2) even then, LLM phrasing varies
+per run, so keep response thresholds tolerant (~0.5–0.7) and let trajectory=1.0 be the
+hard gate. CI integration: run `uv run adk eval` in GitHub Actions to catch regressions.
+
+## Module 25 — observability: plugins + OpenTelemetry (`observability_agent/`)
+
+**Plugins** are cross-cutting lifecycle hooks attached to the **App** (not the Agent):
+subclass `BasePlugin` and override any of ~14 callbacks — `before/after_run`,
+`before/after_agent`, `before/after_model`, `before/after_tool`, `on_event`,
+`on_user_message`, and the error trio `on_model/tool/agent_error_callback`.
+
+- Lab: `AlertingPlugin` counts consecutive model errors via `on_model_error_callback`
+  (returning `None` re-raises; returning an `LlmResponse` would swallow the error —
+  fallback pattern), resets on `after_model_callback`, escalates at a threshold.
+  Verified live + simulated: 3-error streak fired the critical alert; success reset to 0.
+- Enterprise telemetry: `get_gcp_exporters(enable_cloud_tracing=True, ...)` +
+  `maybe_set_otel_providers(...)` ship traces/metrics to Cloud Trace/Monitoring
+  (needs GCP creds — gated behind `ENABLE_GCP_TELEMETRY=1` in our repo).
+- **ADK 2.7 fix vs handout:** `event.event_type` does not exist — use the dedicated
+  callbacks instead of string-matching event types.
+
+## Module 25.5 — RAI safety plugins (`safety_guard/`)
+
+"Instructions are just advice" applied to safety: a plugin is a **deterministic layer
+outside the LLM's reasoning** — regex cannot be prompt-injected.
+
+- `PIIGuardrailPlugin.on_event_callback` inspects every event before it is persisted and
+  yielded; returning a modified `Event` replaces it (**fail-closed**: whole response
+  withheld, not redacted).
+- Verified live: a cooperative `leak_agent` asked to repeat a credit-card number — the
+  user saw only `[SECURITY BLOCK] ...`; harmless messages passed untouched.
+- Extensions: competitor-name redaction, secondary safety-model scoring, URL whitelists.
+- Placement matters: `on_user_message_callback` filters inbound, `before_model_callback`
+  guards prompts, `on_event_callback` is the last gate before the user sees anything.
+
+## Module 26 — callbacks & guardrails (`content_moderator/`)
+
+Same hooks as module 25's plugins, but **agent-level**: passed as constructor args to one
+`Agent`. Rule of thumb: plugin = fleet policy (whole App), callback = this agent's own
+behavior. The short-circuit contract:
+
+| Callback | Return `None` | Return a value |
+|---|---|---|
+| `before_agent` | proceed | `types.Content` ⇒ skip the whole turn (cache hit) |
+| `before_model` | proceed | `LlmResponse` ⇒ skip the LLM call (input guardrail) |
+| `after_model` | keep response | `LlmResponse` ⇒ replace it (output filter/redaction) |
+| `before_tool` | run tool | `dict` ⇒ skip tool, use dict as its result (arg validation) |
+| `after_agent` | — | observe only (cache save) |
+
+Verified live, with two honest findings:
+
+- Blocked-word prompt answered by the canned refusal with **zero LLM calls**; email
+  redacted to `[EMAIL_REDACTED]`; cache-hit replayed the previous answer skipping
+  everything.
+- **The model pre-empted the tool guardrail**: asked for `word_count=10000`, it read the
+  docstring ("max 5000") and called with 5000 itself — the validation callback never
+  fired. Good docstrings prevent violations; the callback stays as the backstop for when
+  the model doesn't comply. Defense in depth, not either/or.
+- **The lab's cache is deliberately naive** — it replays the last answer for ANY next
+  message (asked "capital of France?", got `[CACHED]: 4`). Real caching must key on the
+  normalized query; the lab only teaches the short-circuit mechanism.
+- Watch-out: a short-circuited refusal also got cache-saved — callbacks compose, and
+  side effects of one hook feed the next. Order your hooks' assumptions carefully.

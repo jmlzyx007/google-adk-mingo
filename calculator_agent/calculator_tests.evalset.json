@@ -1,0 +1,155 @@
+{
+  "eval_set_id": "calculator_tests",
+  "name": "Calculator agent regression tests",
+  "description": "Verifies tool trajectory and responses of the module 9 calculator agent.",
+  "eval_cases": [
+    {
+      "eval_id": "addition",
+      "conversation": [
+        {
+          "invocation_id": "inv_addition",
+          "user_content": {
+            "parts": [
+              {
+                "text": "What is 10 + 5?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "10 + 5 = 15."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {
+                  "a": 10,
+                  "b": 5
+                },
+                "name": "add"
+              }
+            ],
+            "tool_responses": [
+              {
+                "name": "add",
+                "response": {
+                  "status": "success",
+                  "result": 15.0,
+                  "message": null
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "multiplication",
+      "conversation": [
+        {
+          "invocation_id": "inv_multiplication",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Multiply 15 by 3."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "15 multiplied by 3 is 45."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {
+                  "a": 15,
+                  "b": 3
+                },
+                "name": "multiply"
+              }
+            ],
+            "tool_responses": [
+              {
+                "name": "multiply",
+                "response": {
+                  "status": "success",
+                  "result": 45.0,
+                  "message": null
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "divide_by_zero",
+      "conversation": [
+        {
+          "invocation_id": "inv_divide_by_zero",
+          "user_content": {
+            "parts": [
+              {
+                "text": "What is 10 divided by 0?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "10 divided by 0 cannot be calculated because division by zero is undefined."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {
+                  "a": 10,
+                  "b": 0
+                },
+                "name": "divide"
+              }
+            ],
+            "tool_responses": [
+              {
+                "name": "divide",
+                "response": {
+                  "status": "error",
+                  "result": 0.0,
+                  "message": "Cannot divide by zero."
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    }
+  ],
+  "creation_timestamp": 0.0
+}
