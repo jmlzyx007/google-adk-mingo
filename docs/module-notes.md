@@ -452,3 +452,102 @@ Verified live, with two honest findings:
   normalized query; the lab only teaches the short-circuit mechanism.
 - Watch-out: a short-circuited refusal also got cache-saved — callbacks compose, and
   side effects of one hook feed the next. Order your hooks' assumptions carefully.
+
+## Module 27 — intro to MCP (`mcp_agent/`)
+
+MCP (Model Context Protocol) = module 14's adapter idea at **protocol level**: any MCP
+server plugs into ADK without a per-tool Python adapter. `MCPToolset` connects, discovers
+the server's tools dynamically, and adapts them all.
+
+```python
+MCPToolset(
+    connection_params=StdioConnectionParams(
+        server_params=StdioServerParameters(
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-filesystem", SANDBOX_DIR]),
+        timeout=60.0),          # default 5s dies on first npx download
+    tool_filter=["list_directory", "read_file"])
+```
+
+Two independent security layers, both verified live:
+- **Sandbox**: the directory passed to the server is a hard filesystem boundary.
+- **`tool_filter`**: the server exposes write/delete tools too, but the LLM never sees
+  them — a delete request produced *zero* tool calls and a polite refusal.
+
+Setup gotchas (ADK 2.7): needs Node.js (server runs via `npx` as a stdio subprocess) and
+`uv add "mcp<2"` — mcp 2.0 broke the imports ADK expects (`mcp.shared.session`). The
+default 5s session timeout fails on the first run while npx downloads the package.
+
+## Module 28 — building a custom MCP server (`custom_mcp_server/`)
+
+The provider side: a stateful shopping-cart server in ~90 lines with the low-level MCP
+SDK, consumed by an ADK agent with the exact same `MCPToolset` pattern as module 27.
+
+Server anatomy (`cart_server.py`):
+- `Server("shopping-cart")` + two decorated handlers: `@app.list_tools()` returns `Tool`
+  objects (name, description, JSON `inputSchema` — the MCP equivalent of module 9's
+  docstring/type-hint lesson), `@app.call_tool()` dispatches by name and returns
+  `[TextContent(text=json.dumps(result))]`.
+- Transport: `mcp.server.stdio.stdio_server()` — the client spawns us as a subprocess.
+- State: module-level dict → lives per server process. The toolset keeps one subprocess
+  per session alive, so cart state survived across turns; it dies with the process
+  (production: Redis/Firestore behind the handlers).
+
+Consumer notes: `command=sys.executable` so the subprocess uses the venv's Python.
+Verified live: parallel adds in one turn (milk + bread), another add next turn, view_cart
+returned all three — cross-turn state in the server confirmed.
+
+Why it matters: the server is agent-framework-agnostic — the same file plugs into Claude
+Desktop, IDEs, or any MCP client unchanged. Tool logic becomes a reusable service, not
+agent code.
+
+## Module 29 — UI integration: custom SSE chat (`ui_agent/`)
+
+A self-contained `index.html` chatting with the api_server — no dev UI involved.
+The repo folder is the **API provider** (agents over HTTP), the custom page is the
+**SSE chat client**. Two terminals, two lines:
+
+```sh
+uv run adk api_server --allow_origins http://localhost:8081 --allow_origins null .
+python -m http.server 8081 -d ui_agent    # then open http://localhost:8081
+```
+
+- CORS is mandatory for a browser page on another origin; don't pass `*` — uv/shell
+  glob-expands it into your folder names.
+- Flow (verified headless): 1) `POST /apps/{app}/users/{u}/sessions/{sid}` (must exist
+  first), 2) `POST /run_sse` with `{"app_name", "user_id", "session_id", "new_message",
+  "streaming": true}`, 3) read the body as a stream, parse `data: {json}` lines, append
+  `content.parts[0].text` — `partial: true` events carry increments.
+- Session persistence across page reloads: keep the session id in `localStorage`
+  (regenerating per load loses the conversation — the lab's self-reflection point).
+
+## Module 30 — custom live streaming client (`streaming_agent/` + `custom_streaming_app/`)
+
+Bidirectional WebSocket streaming — the transport behind voice agents. Same two-terminal
+shape as module 29 (folder = API provider, page = client):
+
+```sh
+uv run adk api_server --allow_origins http://localhost:8081 --allow_origins null .
+python -m http.server 8081 -d custom_streaming_app    # then open http://localhost:8081
+```
+
+In the page: **Connect** (creates the session, opens the WebSocket), type a message or
+**Start Mic**, watch audio chunks arrive in the transcript.
+
+`streaming_agent` is live-only: its model rejects normal chat (`generateContent` 404) —
+use it exclusively through this client, never the dev UI chat box.
+
+- **Real ADK 2.7 endpoint** (lab handout's `/live/{id}` is outdated):
+  `ws://host:8000/run_live?app_name=..&user_id=..&session_id=..&modalities=AUDIO`
+  — session must exist first, same as SSE.
+- Client → server messages are `LiveRequest` JSON: `{"content": {...}}` for text,
+  `{"blob": {mimeType, data(base64)}}` for mic audio chunks; server → client messages
+  are event JSON (text parts and/or `inlineData` audio).
+- **Model requirement**: `bidiGenerateContent` support. Regular flash models are rejected
+  (`gemini-3.6-flash` failed); live models may also reject TEXT response modality —
+  `gemini-3.1-flash-live-preview` answers in AUDIO only.
+- Verified headless: text question over the socket → 9 audio chunks (~91 KiB) streamed
+  back. Browser playback of the PCM chunks (Web Audio API) left as the extension.
+
+SSE (29) vs WebSocket (30): SSE = server→client streaming over plain HTTP, perfect for
+chat text; WebSocket = full duplex, required when the *client* also streams (voice).

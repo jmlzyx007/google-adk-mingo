@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ADK Custom Streaming Client (module 30)</title>
+  <style>
+    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+    #status { margin: 10px; padding: 8px 14px; border: 1px solid #ccc; border-radius: 8px; }
+    #transcript { width: 560px; max-width: 95vw; height: 320px; border: 1px solid #ccc;
+                  padding: 10px; overflow-y: scroll; background: #f9f9f9; }
+    p { margin: 4px 0; }
+    .controls { margin: 10px; display: flex; gap: 8px; }
+    button, input { padding: 10px; font-size: 15px; }
+    input { width: 320px; }
+  </style>
+</head>
+<body>
+  <h2>ADK Live Streaming Client</h2>
+  <div class="controls">
+    <button id="connectBtn">Connect (text)</button>
+    <button id="micBtn" disabled>Start Mic</button>
+  </div>
+  <div class="controls">
+    <input id="textInput" placeholder="Type while connected..." disabled>
+    <button id="sendBtn" disabled>Send</button>
+  </div>
+  <div id="status">Status: Disconnected</div>
+  <div id="transcript"></div>
+
+  <script>
+    const API = "http://localhost:8000";
+    const WS = "ws://localhost:8000";
+    const APP = "streaming_agent";
+    const USER = "live_user";
+    let ws, mediaStream, mediaRecorder;
+
+    const statusDiv = document.getElementById("status");
+    const transcript = document.getElementById("transcript");
+    const connectBtn = document.getElementById("connectBtn");
+    const micBtn = document.getElementById("micBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    const textInput = document.getElementById("textInput");
+
+    function log(msg) {
+      const p = document.createElement("p");
+      p.textContent = msg;
+      transcript.appendChild(p);
+      transcript.scrollTop = transcript.scrollHeight;
+    }
+
+    connectBtn.onclick = async () => {
+      if (ws && ws.readyState === WebSocket.OPEN) { ws.close(); return; }
+
+      const sessionId = "live-" + Date.now();
+      // /run_live requires the session to exist (module 5 lesson applies here too)
+      await fetch(`${API}/apps/${APP}/users/${USER}/sessions/${sessionId}`, { method: "POST" });
+
+      // Real ADK 2.7 endpoint: /run_live with query params (the old /live/{id} is gone).
+      // AUDIO modality: live models (gemini-3.1-flash-live-preview) answer in
+      // speech, not text - TEXT modality is rejected by native-audio models.
+      ws = new WebSocket(
+        `${WS}/run_live?app_name=${APP}&user_id=${USER}&session_id=${sessionId}&modalities=AUDIO`
+      );
+
+      ws.onopen = () => {
+        statusDiv.textContent = "Status: Connected (" + sessionId + ")";
+        connectBtn.textContent = "Disconnect";
+        micBtn.disabled = false; sendBtn.disabled = false; textInput.disabled = false;
+        log("[CLIENT] WebSocket open.");
+      };
+
+      ws.onmessage = (event) => {
+        const ev = JSON.parse(event.data);
+        const part = ev.content?.parts?.[0];
+        if (part?.text) log(`[AGENT${ev.partial ? " (partial)" : ""}] ${part.text}`);
+        const inline = part?.inlineData || part?.inline_data;
+        if (inline) log(`[AGENT] <audio chunk, ${(inline.data || "").length} b64 chars>`);
+        // Real playback: decode base64 PCM and feed a Web Audio API
+        // AudioContext buffer - left as the lab's extension exercise.
+      };
+
+      ws.onclose = () => {
+        statusDiv.textContent = "Status: Disconnected";
+        connectBtn.textContent = "Connect (text)";
+        micBtn.disabled = true; sendBtn.disabled = true; textInput.disabled = true;
+        stopMic();
+        log("[CLIENT] WebSocket closed.");
+      };
+      ws.onerror = (e) => log("[CLIENT] WebSocket error.");
+    };
+
+    // Text messages travel as LiveRequest JSON: {"content": {...}}
+    sendBtn.onclick = () => {
+      const text = textInput.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      log(`[YOU] ${text}`);
+      ws.send(JSON.stringify({ content: { role: "user", parts: [{ text }] } }));
+      textInput.value = "";
+    };
+    textInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendBtn.onclick(); });
+
+    // Audio chunks travel as LiveRequest {"blob": {mimeType, data(base64)}}
+    // NOTE: AUDIO modality needs a live/native-audio model on the agent.
+    micBtn.onclick = async () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") { stopMic(); return; }
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(mediaStream, { mimeType: "audio/webm;codecs=opus" });
+      mediaRecorder.ondataavailable = async (event) => {
+        if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+          const buf = await event.data.arrayBuffer();
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+          ws.send(JSON.stringify({ blob: { mimeType: "audio/webm;codecs=opus", data: b64 } }));
+        }
+      };
+      mediaRecorder.start(100);  // 100ms chunks
+      micBtn.textContent = "Stop Mic";
+      log("[CLIENT] Mic streaming started.");
+    };
+
+    function stopMic() {
+      if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+      if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+      micBtn.textContent = "Start Mic";
+    }
+  </script>
+</body>
+</html>

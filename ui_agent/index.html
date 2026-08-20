@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ADK Custom Chat UI (module 29)</title>
+  <style>
+    body { font-family: sans-serif; display: flex; flex-direction: column;
+           align-items: center; background: #f0f2f5; margin: 0; padding: 20px; }
+    #chat { width: 600px; max-width: 95vw; height: 420px; overflow-y: auto;
+            background: white; border: 1px solid #ccc; border-radius: 8px; padding: 12px; }
+    .msg { margin: 6px 0; padding: 8px 12px; border-radius: 12px; max-width: 80%;
+           white-space: pre-wrap; }
+    .user { background: #d1f7c4; margin-left: auto; }
+    .agent { background: #e8e8e8; margin-right: auto; }
+    form { width: 600px; max-width: 95vw; display: flex; gap: 8px; margin-top: 10px; }
+    input { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
+    button { padding: 10px 16px; border: none; border-radius: 8px;
+             background: #1a73e8; color: white; cursor: pointer; }
+    #status { color: #666; font-size: 12px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h2>ADK Chat (SSE streaming)</h2>
+  <div id="chat"></div>
+  <form id="form">
+    <input id="input" placeholder="Ask something..." autocomplete="off">
+    <button type="submit">Send</button>
+  </form>
+  <div id="status">session: connecting...</div>
+
+  <script>
+    const API = "http://localhost:8000";
+    const APP = "ui_agent";
+    const USER = "web_user";
+    const chat = document.getElementById("chat");
+    const status = document.getElementById("status");
+
+    // Session persistence across page reloads (lab self-reflection fix):
+    // keep the session id in localStorage instead of regenerating it.
+    let sessionId = localStorage.getItem("adk_session_id");
+    if (!sessionId) {
+      sessionId = "session-" + Date.now();
+      localStorage.setItem("adk_session_id", sessionId);
+    }
+
+    async function ensureSession() {
+      // Creating an existing session 409s - that's fine, ignore it.
+      await fetch(`${API}/apps/${APP}/users/${USER}/sessions/${sessionId}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+      }).catch(() => {});
+      status.textContent = `session: ${sessionId}`;
+    }
+    ensureSession();
+
+    function addMsg(cls, text) {
+      const div = document.createElement("div");
+      div.className = "msg " + cls;
+      div.textContent = text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    document.getElementById("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("input");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      addMsg("user", text);
+      const agentDiv = addMsg("agent", "...");
+
+      try {
+        const resp = await fetch(`${API}/run_sse`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            app_name: APP,
+            user_id: USER,
+            session_id: sessionId,
+            new_message: { role: "user", parts: [{ text }] },
+            streaming: true,
+          }),
+        });
+
+        // Read the SSE stream chunk by chunk; each event is a "data: {json}" line.
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "", answer = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();  // keep incomplete tail
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const ev = JSON.parse(line.slice(6));
+            const part = ev.content?.parts?.[0];
+            if (part?.text) {
+              // partial events carry incremental text; append as it arrives
+              if (ev.partial) answer += part.text;
+              else answer = part.text;
+              agentDiv.textContent = answer;
+              chat.scrollTop = chat.scrollHeight;
+            }
+          }
+        }
+      } catch (err) {
+        agentDiv.textContent = "[connection error] " + err;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -38,6 +38,19 @@ curl -X POST http://127.0.0.1:8000/run_sse \
   -d '{"app_name": "support_analyzer", "user_id": "u1", "session_id": "s1", "new_message": {"role": "user", "parts": [{"text": "My invoice is wrong"}]}}'
 ```
 
+### Pairing the API server with a custom UI (module 29)
+
+The repo folder is the API provider; any frontend is just an HTTP client of it.
+For the SSE chat page in `ui_agent/index.html`:
+
+```sh
+# terminal 1 - agents as an API (CORS opened for the page's origin)
+uv run adk api_server --allow_origins http://localhost:8081 --allow_origins null .
+
+# terminal 2 - serve the chat page, then open http://localhost:8081
+python -m http.server 8081 -d ui_agent
+```
+
 ## How discovery works
 
 `adk web` / `adk run` find agents by scanning subfolders of the agents directory: any

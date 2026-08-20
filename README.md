@@ -20,7 +20,7 @@ Full details: [docs/setup.md](docs/setup.md) · [docs/execution-modes.md](docs/e
 - [x] **Part 2 — Tools & Capabilities (modules 8–14): done** — `researcher_agent/` (8), `calculator_agent/` (9), `memory_agent/` (10), `market_analyst/` (11), `research_assistant/` (12), `secure_finance/` (13), `persistent_agent/` (13.5), `fact_finder_agent/` (14)
 - [x] **Part 3 — Multi-Agent Systems (modules 15–21): done** — `greeting_system/` (15), `news_aggregator/` (16), `market_router/` (17), `support_router_v2/` (18), `travel_team/` (19), `essay_refiner/` (20), `research_specialist/` + `a2a_orchestrator/` (21)
 - [x] **Part 4 — Production Readiness (modules 22–26): done** — `personal_tutor/` (22), `doc_processor/` (23), `calculator_agent/` evalset (24), `observability_agent/` (25), `safety_guard/` (25.5), `content_moderator/` (26)
-- [ ] Part 5 — Advanced Integrations, MCP & UI (modules 27–30)
+- [x] **Part 5 — Advanced Integrations, MCP & UI (modules 27–30): done** — `mcp_agent/` (27), `custom_mcp_server/` (28), `ui_agent/` (29), `streaming_agent/` + `custom_streaming_app/` (30)
 - [ ] Part 6 — Deployment & Enterprise (modules 31–36)
 - [ ] Part 7 — Capstone & Best Practices (modules 37–40)
 
@@ -58,6 +58,11 @@ doc_processor/       # module 23 — artifacts (versioned files, text + binary)
 observability_agent/ # module 25 — alerting plugin + optional GCP telemetry
 safety_guard/        # module 25.5 — fail-closed PII guardrail plugin
 content_moderator/   # module 26 — five agent-level callbacks (guardrails, cache)
+mcp_agent/           # module 27 — MCP consumer (filesystem server, tool_filter)
+custom_mcp_server/   # module 28 — MCP provider (cart_server.py) + consuming agent
+ui_agent/            # module 29 — custom SSE chat UI (index.html + api_server)
+streaming_agent/     # module 30 — live agent (bidi model) for the streaming client
+custom_streaming_app/# module 30 — WebSocket client (text + mic, /run_live)
 docs/                # split-out documentation
 verify_setup.py      # quick environment smoke test
 .env.example         # auth template (copy to .env — never committed)
